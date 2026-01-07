@@ -187,14 +187,16 @@ value_added_per_line = []
 results = []
 total_old_profit = 0
 #total_new_profit = 0
+step_value_added = [0] * len(incremental_pcts)
 
 for i in range(num_lines):
     unit_profit = avg_unit_price[i] - avg_unit_cost[i]
-
     old_units = prod_unit[i]
     new_units = old_units
-    for pct in incremental_pcts:
+    for idx,pct in enumerate(incremental_pcts):
         new_units *= (1 + pct / 100)
+        inc_units = new_units - old_units 
+        step_value_added[idx] += inc_units * unit_profit
     #new_units = old_units * (1 + prod_inc_per/100)
     incremental_units = new_units - old_units
 
@@ -212,8 +214,8 @@ for i in range(num_lines):
         "Old Units": old_units,
         "New Units": new_units,
         "Incremental Units": incremental_units,
-        "Value Added": value_added,
-        "Old Profit": old_profit
+        "Value Added": value_added
+        #"Old Profit": old_profit
     })
 
 
@@ -229,21 +231,21 @@ save_labor = old_labor - new_labor
 
 total_savings = save_maint + save_labor
 
-benefit.append({"Old Maintenance": old_maint,
-                "New Maintenance": new_maint,
-                "Maintenance Benefit": save_maint,
-                "Old Labor Cost": old_labor,
-                "New Labor Cost": new_labor,
-                "Labor Cost Benefit": save_labor,
-                "Total Savings": total_savings
-    })
+#benefit.append({"Old Maintenance": old_maint,
+#                "New Maintenance": new_maint,
+#                "Maintenance Benefit": save_maint,
+#                "Old Labor Cost": old_labor,
+#                "New Labor Cost": new_labor,
+#                "Labor Cost Benefit": save_labor,
+#                "Total Savings": total_savings
+#    })
                 
 
 df_value_added = pd.DataFrame(results)
-df_savings = pd.DataFrame(benefit)
+#df_savings = pd.DataFrame(benefit)
 
 with tab2:
-   st.header("Value Added per Line (After IIoT)")
+   st.header("Value Added After IIoT")
    st.dataframe(
     df_value_added.style.format({
         "Unit Profit": "{:,.2f}",
@@ -257,18 +259,26 @@ with tab2:
  
 
    st.header("Savings After IIoT")
-   st.dataframe(
-    df_savings.style.format({
-        "Old Maintenance": "{:,.2f}",
-        "New Maintenance": "{:,.2f}",
-        "Maintenance Benefit": "{:,.2f}",
-        "Old Labor Cost": "{:,.2f}",
-        "New Labor Cost": "{:,.2f}",
-        "Labor Cost Benefit": "{:,.2f}",
-        "Total Savings": "{:,.2f}"
-    }),
-    use_container_width=True
-)
+   matrix_data = [[old_maint,new_maint,save_maint], [old_labor,new_labor,save_labor]]
+   matrix_cols = ["Old" , "New" , "Benefit"]
+   matrix_index = ["Maintenance" , "Labor" ]
+   df_matrix = pd.DataFrame(matrix_data,columns=matrix_cols,index=matrix_index)
+   st.dataframe(df_matrix.style.format("{:,.2f}"), use_container_width=True)
+
+
+      
+#   st.dataframe(
+#    df_savings.style.format({
+#        "Old Maintenance": "{:,.2f}",
+#        "New Maintenance": "{:,.2f}",
+#        "Maintenance Benefit": "{:,.2f}",
+#        "Old Labor Cost": "{:,.2f}",
+#        "New Labor Cost": "{:,.2f}",
+#        "Labor Cost Benefit": "{:,.2f}",
+#        "Total Savings": "{:,.2f}"
+#    }),
+#    use_container_width=True
+#)
 
 total_annual_benefit = sum(value_added_per_line)
 net_annual_cashflow = total_annual_benefit - annual_iiot_cost + total_savings
@@ -313,14 +323,41 @@ with tab3:
    new_total_cost = total_old_profit + total_annual_benefit + total_savings - annual_iiot_cost
  
    fig = go.Figure(go.Waterfall(name="Cost Impact",orientation="v",measure=["absolute", "relative", "relative","relative", "total"],
-        x=["Old Profit","Production Increase","Total Savings","Annual IIOT subscription fee","New Profit"],
+        x=["Old Savings","Production Increase","Maintenance and Labor Savings ","Annual IIOT subscription fee","New Savings"],
         y=[total_old_profit, +total_annual_benefit,+total_savings,-annual_iiot_cost,new_total_cost],
         text=[f"{total_old_profit:,.0f}", f"+{total_annual_benefit:,.0f}", f"+{total_savings:,.0f}", f"-{annual_iiot_cost:,.0f}",f"{new_total_cost:,.0f}"],
         textposition="outside",connector=dict(line=dict(color="gray")), increasing=dict(marker=dict(color="#00CC96")),decreasing=dict(marker=dict(color="#EF553B")),totals=dict(marker=dict(color="#636EFA"))))
-   fig.update_layout(title="Annual Cost Reduction Breakdown (After IIoT)",yaxis_title="Annual Profit", height=450, margin=dict(t=80, l=60, r=40, b=40),template="plotly_white",showlegend=False)
+   fig.update_layout(title="Annual Cost Reduction Breakdown (After IIoT)",yaxis_title="Annual Benefit (₹)", height=450, margin=dict(t=80, l=60, r=40, b=40),template="plotly_white",showlegend=False)
 
    fig.update_yaxes(tickformat=",")
 
    fig
+  
+ #------------------- SECOND GRAPH ------------------------------------
+
+   labels = [f"Year {i+1}" for i in range(len(incremental_pcts))]
+   fig1 = go.Figure()
+
+   fig1.add_trace(go.Scatter(
+    x=labels,
+    y=step_value_added,
+    mode="lines+markers+text",
+    marker=dict(size=10, color="lightgreen"),
+    line=dict(width=3, color="lightgreen"),
+    text=[f"{val:,.0f} (+{pct}%)" for val, pct in zip(step_value_added, incremental_pcts)],
+    textposition="top center",
+    name="Value Added"
+))
+
+   fig1.update_layout(
+    title="Year-wise Value Added After IIoT",
+    xaxis_title="Year",
+    yaxis_title="Value Added (₹)",
+    template="plotly_dark",
+    height=450,
+    hovermode="x unified"
+)
+   st.plotly_chart(fig1, use_container_width=True)
+
 
      
